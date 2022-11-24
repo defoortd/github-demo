@@ -1,3 +1,8 @@
+/*
+Naming convention according to the Microsoft Cloud Adoption Framework recommendation:
+https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-naming
+*/
+
 @allowed([
   'dev'
   'tst'
