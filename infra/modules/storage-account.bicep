@@ -15,7 +15,8 @@ param location string = resourceGroup().location
 @description('Pricing Tier')
 param skuName string = 'Standard_LRS'
 
-param keyvaultName string
+param keyVaultName string
+param keyVaultResourceGroup string = resourceGroup().name
 param connectionstringSecretName string
 
 param enableMonitoring bool = false
@@ -36,23 +37,25 @@ param allowSharedKeyAccess bool = false
 
 param userAssignedIdentityResourceId string = ''
 
-var systemAssigned = {
-    type: 'SystemAssigned'
-}
-var userAssigned = {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-        '${userAssignedIdentityResourceId}': {}
-    }
+resource key_vault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
+    name: keyVaultName
+    scope: resourceGroup(keyVaultResourceGroup)
 }
 
-resource storageAccount 'Microsoft.Storage/storageAccounts@2021-06-01' = {
+resource storage_account 'Microsoft.Storage/storageAccounts@2021-06-01' = {
     name: storageAccountName
     location: location
     sku: {
         name: skuName
     }
-    identity: userAssignedIdentityResourceId == '' ? systemAssigned : userAssigned
+    identity: userAssignedIdentityResourceId == '' ? {
+        type: 'SystemAssigned'
+    } : {
+        type: 'UserAssigned'
+        userAssignedIdentities: {
+            '${userAssignedIdentityResourceId}': {}
+        }
+    }
     kind: 'StorageV2'
     tags: tags
     properties: {
@@ -77,9 +80,60 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2021-06-01' = {
     }
 }
 
-resource blobServices 'Microsoft.Storage/storageAccounts/blobServices@2021-06-01' = {
+resource storage_account_diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
+    name: 'diagnostics'
+    scope: storage_account
+    properties: {
+        workspaceId: loganalyticsWorkspaceId
+        metrics: [
+            {
+                category: 'Transaction'
+                enabled: true
+            }
+        ]
+    }
+}
+
+resource private_endpoint 'Microsoft.Network/privateEndpoints@2021-05-01' = if (enableprivateendpoint) {
+    name: '${storageAccountName}-pe'
+    location: location
+    tags: tags
+    properties: {
+        subnet: {
+            id: subnetId
+        }
+        privateLinkServiceConnections: [
+            {
+                name: '${storageAccountName}-pe'
+                properties: {
+                    privateLinkServiceId: storage_account.id
+                    groupIds: [
+                        'blob'
+                    ]
+                }
+            }
+        ]
+    }
+}
+
+resource private_dns_zone_group 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = if (enableprivateendpoint) {
     name: 'default'
-    parent: storageAccount
+    parent: private_endpoint
+    properties: {
+        privateDnsZoneConfigs: [
+            {
+                name: 'privatelink.blob.${environment().suffixes.storage}'
+                properties: {
+                    privateDnsZoneId: privateDnsZoneId
+                }
+            }
+        ]
+    }
+}
+
+resource blob_services 'Microsoft.Storage/storageAccounts/blobServices@2021-06-01' = {
+    name: 'default'
+    parent: storage_account
     properties: {
         deleteRetentionPolicy: {
             enabled: true
@@ -101,60 +155,9 @@ resource blobServices 'Microsoft.Storage/storageAccounts/blobServices@2021-06-01
     }
 }
 
-resource privateEndpoint 'Microsoft.Network/privateEndpoints@2021-05-01' = if (enableprivateendpoint) {
-    name: '${storageAccountName}-pe'
-    location: location
-    tags: tags
-    properties: {
-        subnet: {
-            id: subnetId
-        }
-        privateLinkServiceConnections: [
-            {
-                name: '${storageAccountName}-pe'
-                properties: {
-                    privateLinkServiceId: storageAccount.id
-                    groupIds: [
-                        'blob'
-                    ]
-                }
-            }
-        ]
-    }
-}
-
-resource privateDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2021-05-01' = if (enableprivateendpoint) {
-    name: 'default'
-    parent: privateEndpoint
-    properties: {
-        privateDnsZoneConfigs: [
-            {
-                name: 'privatelink.blob.${environment().suffixes.storage}'
-                properties: {
-                    privateDnsZoneId: privateDnsZoneId
-                }
-            }
-        ]
-    }
-}
-
-resource saDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
-    name: 'DLW-AzureMonitoring'
-    scope: storageAccount
-    properties: {
-        workspaceId: loganalyticsWorkspaceId
-        metrics: [
-            {
-                category: 'Transaction'
-                enabled: true
-            }
-        ]
-    }
-}
-
-resource blobDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
-    name: 'DLW-AzureMonitoring'
-    scope: blobServices
+resource blob_services_diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
+    name: 'diagnostics'
+    scope: blob_services
     properties: {
         workspaceId: loganalyticsWorkspaceId
         logs: [
@@ -180,14 +183,14 @@ resource blobDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = i
     }
 }
 
-resource tableServices 'Microsoft.Storage/storageAccounts/tableServices@2021-06-01' = if (enableMonitoring) {
+resource table_services 'Microsoft.Storage/storageAccounts/tableServices@2021-06-01' = if (enableMonitoring) {
     name: 'default'
-    parent: storageAccount
+    parent: storage_account
 }
 
-resource tableDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
-    name: 'DLW-AzureMonitoring'
-    scope: tableServices
+resource table_services_diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
+    name: 'diagnostics'
+    scope: table_services
     properties: {
         workspaceId: loganalyticsWorkspaceId
         logs: [
@@ -213,14 +216,14 @@ resource tableDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = 
     }
 }
 
-resource fileServices 'Microsoft.Storage/storageAccounts/fileServices@2021-06-01' = if (enableMonitoring) {
+resource file_services 'Microsoft.Storage/storageAccounts/fileServices@2021-06-01' = if (enableMonitoring) {
     name: 'default'
-    parent: storageAccount
+    parent: storage_account
 }
 
-resource fileDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
-    name: 'DLW-AzureMonitoring'
-    scope: fileServices
+resource file_services_diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
+    name: 'diagnostics'
+    scope: file_services
     properties: {
         workspaceId: loganalyticsWorkspaceId
         logs: [
@@ -246,14 +249,14 @@ resource fileDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = i
     }
 }
 
-resource queueServices 'Microsoft.Storage/storageAccounts/queueServices@2021-06-01' = if (enableMonitoring) {
+resource queue_services 'Microsoft.Storage/storageAccounts/queueServices@2021-06-01' = if (enableMonitoring) {
     name: 'default'
-    parent: storageAccount
+    parent: storage_account
 }
 
-resource queueDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
+resource queue_services_diagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = if (enableMonitoring) {
     name: 'DLW-AzureMonitoring'
-    scope: queueServices
+    scope: queue_services
     properties: {
         workspaceId: loganalyticsWorkspaceId
         logs: [
@@ -279,12 +282,12 @@ resource queueDiag 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = 
     }
 }
 
-resource connectionstring 'Microsoft.KeyVault/vaults/secrets@2021-10-01' = {
-    name: '${keyvaultName}/${connectionstringSecretName}'
+resource connectionstring_secret 'Microsoft.KeyVault/vaults/secrets@2021-10-01' = {
+    name: '${key_vault.name}/${connectionstringSecretName}'
     properties: {
-        value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys(storageAccount.apiVersion).Keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
+        value: 'DefaultEndpointsProtocol=https;AccountName=${storage_account.name};AccountKey=${storage_account.listKeys(storage_account.apiVersion).Keys[0].value};EndpointSuffix=${environment().suffixes.storage}'
     }
 }
 
-output name string = storageAccount.name
-output id string = storageAccount.id
+output name string = storage_account.name
+output id string = storage_account.id
