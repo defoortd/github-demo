@@ -2,7 +2,9 @@ name: Infra-Validation
 
 on:
   pull_request:
-    branches-ignore:
+    types:
+      - opened
+    branches:
       - main
 
   workflow_dispatch:
