@@ -33,6 +33,6 @@ jobs:
           subscriptionId: ${{ env.AZURE_SUBSCRIPTION_ID }}
           resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
           template: infra/main.bicep
-          parameters: infra/main.parameters.json
+          parameters: infra/dev/main.parameters.json
           deploymentMode: Validate
           deploymentName: Validate-Infra-${{ github.run_id }}
