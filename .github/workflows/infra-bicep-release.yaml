@@ -76,7 +76,7 @@ jobs:
 
   release-tst:
     name: "Test"
-    needs: dev
+    needs: release-dev
     environment: Test
     runs-on: ubuntu-latest
     steps:
@@ -105,7 +105,7 @@ jobs:
 
   release-prd:
     name: "Production"
-    needs: release-dev
+    needs: release-tst
     environment: Production
     runs-on: ubuntu-latest
     steps:
