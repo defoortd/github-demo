@@ -1,0 +1,38 @@
+name: Infra-Validation
+
+on:
+  pull_request:
+    branches-ignore:
+      - main
+    paths:
+      - infra/**
+
+  workflow_dispatch:
+
+env:
+  AZURE_SUBSCRIPTION_ID: "cc934d76-6d72-49cb-a908-81217ad4ae29"
+  AZURE_RESOURCE_GROUP: "RG_Donnely.Defoort"
+
+jobs:
+  build:
+    name: "Validate Templates"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout source code"
+        uses: actions/checkout@main
+
+      - name: "Login to Azure"
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: "Validate Infra Template"
+        uses: azure/arm-deploy@v1
+        with:
+          scope: resourcegroup
+          subscriptionId: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+          template: infra/main.bicep
+          parameters: infra/main.parameters.json
+          deploymentMode: Validate
+          deploymentName: Validate-Infra-${{ github.run_id }}
