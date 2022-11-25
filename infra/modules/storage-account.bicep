@@ -22,7 +22,7 @@ param connectionstringSecretName string
 param enableMonitoring bool = false
 param loganalyticsWorkspaceId string = ''
 
-param enableprivateendpoint bool = true
+param enableprivateendpoint bool = false
 param subnetId string = ''
 param privateDnsZoneId string = ''
 
