@@ -6,7 +6,7 @@
 param environmentName string
 param location string = resourceGroup().location
 
-var projectName = 'demo'
+var projectName = 'defoortd'
 var tags = {
   environment: environmentName
   project: projectName
