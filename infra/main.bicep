@@ -34,6 +34,18 @@ module key_vault 'modules/keyvault.bicep' = {
   }
 }
 
+module key_vault2 'modules/keyvault.bicep' = {
+  name: '${projectName}-KeyVault'
+  params: {
+    accessPolicies: []
+    location: location
+    name: '${naming_convention.outputs.key_vault}-002'
+    enableMonitoring: false
+    sku: 'standard'
+    tags: tags
+  }
+}
+
 module storage_account 'modules/storage-account.bicep' = {
   name: '${projectName}-StorageAccount'
   params: {
